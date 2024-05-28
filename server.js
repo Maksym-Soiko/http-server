@@ -53,7 +53,16 @@ app.get('/hourly-readings', (req, res) => {
         }
 
         const lines = data.trim().split('\n');
-        const hourlyReadings = []; 
+        const hourlyReadings = {}; 
+
+        for (let hour = 0; hour < 24; hour++) {
+            hourlyReadings[hour] = {
+                temp: [],
+                humidity: [],
+                aqi: [],
+                dustConcentration: []
+            };
+        }
 
         lines.forEach(line => {
             const parts = line.split(' ');
@@ -61,6 +70,8 @@ app.get('/hourly-readings', (req, res) => {
             const readingTime = parts[1];
 
             if (readingDate === date) {
+                const hour = parseInt(readingTime.split(':')[0]); // Отримати годину з часу
+
                 const temp = parseFloat(parts[2]);
                 let humidity = parseFloat(parts[3]);
                 let aqi = parseFloat(parts[4]);
@@ -72,12 +83,48 @@ app.get('/hourly-readings', (req, res) => {
                 if (aqi > 500) aqi = 500;
                 if (dustConcentration < 0) dustConcentration = 0;
 
-                hourlyReadings.push({ datetime: `${readingDate} ${readingTime}`, temp, humidity, aqi, dustConcentration });
+                hourlyReadings[hour].temp.push(temp);
+                hourlyReadings[hour].humidity.push(humidity);
+                hourlyReadings[hour].aqi.push(aqi);
+                hourlyReadings[hour].dustConcentration.push(dustConcentration);
             }
         });
-        res.json(hourlyReadings);
+
+        // Обчислення середніх значень за кожну годину
+        const hourlyAverages = [];
+        for (let hour = 0; hour < 24; hour++) {
+            const readings = hourlyReadings[hour];
+            const average = calculateHourlyAverage(readings);
+            hourlyAverages.push({ datetime: `${date} ${hour}:00`, ...average });
+        }
+
+        res.json(hourlyAverages);
     });
 });
+
+
+function calculateHourlyAverage(readings) {
+    const total = {
+        temp: 0,
+        humidity: 0,
+        aqi: 0,
+        dustConcentration: 0
+    };
+
+    readings.temp.forEach(temp => total.temp += temp);
+    readings.humidity.forEach(humidity => total.humidity += humidity);
+    readings.aqi.forEach(aqi => total.aqi += aqi);
+    readings.dustConcentration.forEach(dustConcentration => total.dustConcentration += dustConcentration);
+
+    const count = readings.temp.length;
+    return {
+        temp: (total.temp / count).toFixed(2),
+        humidity: (total.humidity / count).toFixed(2),
+        aqi: (total.aqi / count).toFixed(2),
+        dustConcentration: (total.dustConcentration / count).toFixed(2)
+    };
+}
+
 
 // Запит для отримання вимірів за останні кілька днів
 app.get('/daily-averages', (req, res) => {
@@ -102,9 +149,9 @@ app.get('/daily-averages', (req, res) => {
         lines.forEach(line => {
             const parts = line.split(' ');
             const readingDate = parts[0];
-            const date = readingDate.split('T')[0]; // Отримання дати без часу
+            const datetime = `${readingDate} ${parts[1]}`; // Зміна з "date" на "datetime"
 
-            if (date >= formattedStartDate && date <= endDate) {
+            if (readingDate >= formattedStartDate && readingDate <= endDate) {
                 const temp = parseFloat(parts[2]);
                 let humidity = parseFloat(parts[3]);
                 let aqi = parseFloat(parts[4]);
@@ -117,25 +164,28 @@ app.get('/daily-averages', (req, res) => {
                 if (aqi > 500) aqi = 500;
                 if (dustConcentration < 0) dustConcentration = 0;
 
-                if (!dailyReadings[date]) {
-                    dailyReadings[date] = [];
+                if (!dailyReadings[readingDate]) {
+                    dailyReadings[readingDate] = [];
                 }
 
-                dailyReadings[date].push({ datetime: `${readingDate} ${parts[1]}`, temp, humidity, aqi, dustConcentration, gasLeak });
+                dailyReadings[readingDate].push({ datetime, temp, humidity, aqi, dustConcentration, gasLeak }); // Зміна з "date" на "datetime"
             }
         });
 
         // Обчислення середніх значень за кожен день
         const dailyAverages = [];
-        Object.keys(dailyReadings).forEach(date => {
-            const readings = dailyReadings[date];
+        Object.keys(dailyReadings).forEach(readingDate => { // Зміна з "date" на "readingDate"
+            const readings = dailyReadings[readingDate]; // Зміна з "date" на "readingDate"
             const average = calculateDailyAverage(readings);
-            dailyAverages.push({ date, ...average });
+            dailyAverages.push({ datetime: readingDate, ...average }); // Зміна з "date" на "datetime" тут та додано "...average"
         });
 
         res.json(dailyAverages);
     });
 });
+
+// Решта коду залишається без змін
+
 
 function formatDate(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
