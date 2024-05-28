@@ -128,11 +128,10 @@ app.get('/daily-averages', (req, res) => {
         // Обчислення середніх значень за кожен день
         const dailyAverages = [];
         Object.keys(dailyReadings).forEach(date => {
-        const readings = dailyReadings[date];
-        const average = calculateDailyAverage(readings);
-        dailyAverages.push({ date, ...average });
-});
-
+            const readings = dailyReadings[date];
+            const average = calculateDailyAverage(readings);
+            dailyAverages.push({ date, ...average });
+        });
 
         res.json(dailyAverages);
     });
@@ -167,10 +166,9 @@ function calculateDailyAverage(readings) {
         humidity: (total.humidity / count).toFixed(2),
         aqi: (total.aqi / count).toFixed(2),
         dustConcentration: (total.dustConcentration / count).toFixed(2),
-        gasLeak: ((total.gasLeakCount / count) * 100)
+        gasLeak: total.gasLeakCount > 0
     };
 }
-
 
 
 app.listen(port, () => {
